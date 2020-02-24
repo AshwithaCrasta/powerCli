@@ -1,0 +1,47 @@
+
+$all_vms = Get-ResourcePool -Name k_pool | Get-VM
+ForEach($vm_in_rp in $all_vms){
+	Stop-VM -VM $vm_in_rp -Confirm:$false
+}
+
+
+$desired = @(
+    @{
+        Name = 'disk.EnableUUID'
+        Value = $true
+    },
+    @{
+        Name = 'ctkEnabled'
+        Value = $true
+    },
+    @{
+        Name = 'scsi0:0.ctkEnabled'
+        Value = $true
+    }
+)
+$cluster = Get-Cluster 'PP_PERF'
+$poweredoffvmsincluster = $cluster | Get-VM | Where-Object {$_.powerstate -eq "poweredoff"}
+ 
+ForEach($VM in $poweredoffvmsincluster) {
+    $desired | %{
+        $setting = Get-AdvancedSetting -Entity $vm -Name $_.Name
+        if($setting){
+            if($setting.Value -eq $_.Value){
+                Write-Output "Setting $($_.Name) present and set correctly"
+            }
+            else{
+                Write-Output "Setting $($_.Name) present but not set correctly"
+                Set-AdvancedSetting -AdvancedSetting $setting -Value $_.Value -Confirm:$false
+            }
+        }
+        else{
+            Write-Output "Setting $($_.Name) not present."
+            New-AdvancedSetting -Name $_.Name -Value $_.Value -Entity $vm -Confirm:$false
+        }
+    }
+}
+
+ForEach($VM in $poweredoffvmsincluster) {
+Start-VM -VM $VM -Confirm -RunAsync $true
+}
+
